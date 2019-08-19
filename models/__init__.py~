@@ -1,0 +1,44 @@
+import torchvision.models as models
+from models.normal_estimation_net import *
+from models.unet_3_depth import *
+from models.fconv_fusion import *
+from models.loss import *
+
+def get_model(name, track_running_static):
+    model = _get_model_instance(name)
+
+    if name == 'vgg_16':
+        model = model(input_channel=3, output_channel=3, track_running_static = track_running_static)
+    elif name == 'unet_3':
+        model = model(input_channel=1, output_channel=3, track_running_static = track_running_static)
+    elif name == 'fconv':
+        model = model(input_channel1=3, input_channel2=3, output_channel=3, track_running_static = track_running_static)
+    
+    return model
+
+def _get_model_instance(name):
+    try:
+        return {
+            'vgg_16': vgg_16,
+            'unet_3': unet_3,
+            'fconv': fconv,
+        }[name]
+    except:
+        print('Model {} not available'.format(name))
+
+def get_lossfun(name, input, label, mask, train=True):
+    lossfun = _get_loss_instance(name)
+
+    loss, df = lossfun(input, label, mask, train)
+    
+    return loss, df
+
+def _get_loss_instance(name):
+    try:
+        return {
+            'cosine': cross_cosine,
+            'sine': sin_cosine,
+            'l1': l1norm,
+        }[name]
+    except:
+        print('loss function {} not available'.format(name))

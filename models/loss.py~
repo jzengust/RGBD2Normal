@@ -1,0 +1,137 @@
+# ################################
+# Loss functions
+# cosine, l1
+# Jin Zeng, 20180821
+#################################
+
+import torch
+import numpy as np
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+def cross_cosine(input, label, mask, train=True):
+    # input: bs*ch*h*w
+    # label: bs*h*w*ch
+    # mask: bs*h*w
+    bz, ch, h, w = input.size()
+    
+    # normalization
+    input = input.permute(0,2,3,1).contiguous().view(-1,ch)
+    input_v = F.normalize(input,p=2)
+    label_v = label.contiguous().view(-1,ch)
+    target = torch.ones([input.size(0),], dtype=torch.float).cuda(0)
+    mask_t = mask.view(-1,1)
+    mask_t = torch.squeeze(mask_t)
+    target[torch.eq(mask_t,0)] = -1
+    
+    if(train == True): # use mask from surface normal
+        loss = F.cosine_embedding_loss(input_v, label_v, target, margin=1)
+        df = torch.autograd.grad(loss,input_v,only_inputs=True)
+        df = df[0]
+        df = torch.autograd.grad(input_v,input,grad_outputs=df,only_inputs=True)
+        df = df[0]
+        mask = mask.view(-1,1).expand_as(df)
+        df[torch.eq(mask,0)] = 0
+        df = df.view(-1, h, w, ch)
+        df = df.permute(0,3,1,2).contiguous()
+    else:  # use mask from depth valid
+        # mask = mask.view(-1,1).expand_as(input_v)
+        # input_v[torch.eq(mask,0)] = 0
+        # label_v[torch.eq(mask,0)] = 0
+        # loss = F.cosine_embedding_loss(input_v, label_v, target, margin=1, size_average=False)
+        # loss = loss/sum(mask_t)
+        # loss = loss.data.item()
+        input_v[torch.isnan(input_v)] = 0
+        loss = F.cosine_similarity(input_v, label_v)#compute inner product 
+        loss[torch.ge(loss,1)] = 1
+        loss[torch.le(loss,-1)] = -1
+        loss = torch.acos(loss)   
+        loss[torch.eq(mask_t,0)] = 0 #rm the masked pixels
+        loss = (torch.mean(loss))*(h*w/(sum(mask_t)))
+        loss = loss.data.item()
+        df = None        
+    
+    return loss, df
+
+def l1norm(input, label, mask, train=True):
+    # input: bs*ch*h*w
+    # label: bs*h*w*ch
+    # mask: bs*h*w
+    bz, ch, h, w = input.size()
+    
+    # normalization
+    input = input.permute(0,2,3,1).contiguous().view(-1,ch)
+    input_v = F.normalize(input,p=2)
+    label_v = label.contiguous().view(-1,ch)
+    target = torch.ones([input.size(0),], dtype=torch.float).cuda(0)
+    mask_t = mask.view(-1,1)
+    mask_t = torch.squeeze(mask_t)
+    target[torch.eq(mask_t,0)] = -1
+    
+    if(train == True): # use mask from surface normal
+        loss = F.l1_loss(input_v, label_v, reduce=False)#compute inner product
+        loss[torch.eq(mask_t,0)] = 0 #rm the masked pixels 
+        loss = torch.mean(loss)
+        df = torch.autograd.grad(loss,input_v,only_inputs=True)
+        df = df[0]
+        df = torch.autograd.grad(input_v,input,grad_outputs=df,only_inputs=True)
+        df = df[0]
+        mask = mask.view(-1,1).expand_as(df)
+        df[torch.eq(mask,0)] = 0
+        df = df.view(-1, h, w, ch)
+        df = df.permute(0,3,1,2).contiguous()
+    else:  # use mask from depth valid
+        input_v[torch.isnan(input_v)] = 0
+        loss = F.cosine_similarity(input_v, label_v)#compute inner product 
+        loss[torch.ge(loss,1)] = 1
+        loss[torch.le(loss,-1)] = -1
+        loss = torch.acos(loss)   
+        loss[torch.eq(mask_t,0)] = 0 #rm the masked pixels
+        loss = (torch.mean(loss))*(h*w/(sum(mask_t)))
+        loss = loss.data.item()
+        df = None    
+    
+    return loss, df
+
+def sin_cosine(input, label, mask, train=True):
+    # input: bs*ch*h*w
+    # label: bs*h*w*ch
+    # mask: bs*h*w
+    bz, ch, h, w = input.size()
+    
+    # normalization
+    input = input.permute(0,2,3,1).contiguous().view(-1,ch)
+    input_v = F.normalize(input,p=2)
+    label_v = label.contiguous().view(-1,ch)
+    mask_t = mask.view(-1,1)
+    mask_t = torch.squeeze(mask_t)
+    ones_v = torch.ones([input.size(0),], dtype=torch.float).cuda(0)
+    target = torch.zeros([input.size(0),], dtype=torch.float).cuda(0)
+    target[torch.eq(mask_t,0)] = 1
+    comp_zeros = torch.zeros([input.size(0),], dtype=torch.float).cuda(0)
+    
+    if(train == True): # use mask from surface normal
+        loss = F.cosine_similarity(input_v, label_v)#compute inner product
+        loss = ones_v - torch.pow(loss,2)
+        loss = torch.sqrt(loss)
+        loss = torch.max(loss-target, comp_zeros)
+        # loss[torch.eq(mask_t,0)] = 0 #rm the masked pixels         
+        loss = torch.mean(loss)
+        df = torch.autograd.grad(loss,input_v,only_inputs=True)
+        df = df[0]
+        df = torch.autograd.grad(input_v,input,grad_outputs=df,only_inputs=True)
+        df = df[0]
+        mask = mask.view(-1,1).expand_as(df)
+        df[torch.eq(mask,0)] = 0
+        df = df.view(-1, h, w, ch)
+        df = df.permute(0,3,1,2).contiguous()
+    else:  # use mask from depth valid
+        loss = F.cosine_similarity(input_v, label_v)#compute inner product 
+        loss = torch.acos(loss)   
+        loss[torch.eq(mask_t,0)] = 0 #rm the masked pixels
+        loss = sum(loss)/sum(mask_t)
+        loss = loss.data.item()
+        df = None       
+    
+    return loss, df

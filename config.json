@@ -1,0 +1,11 @@
+{
+    "matterport":
+  {
+    "data_path":""
+  },
+
+  "scannet":
+  {
+    "data_path":""
+  }
+}
