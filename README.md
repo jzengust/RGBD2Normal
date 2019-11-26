@@ -1,4 +1,4 @@
-RGBD2Normal
+Deep Surface Normal Estimation with Hierarchical RGB-D Fusion
 ====
 # Paper
 **Deep Surface Normal Estimation with Hierarchical RGB-D Fusion** (CVPR2019) [[Project page](https://huangyunmu.github.io/HFMNet_CVPR2019/)]
